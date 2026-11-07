@@ -43,6 +43,8 @@ The dashboard reads database connection settings from `DB_HOST`, `DB_PORT`, `DB_
 
 ## Tests
 
+The GitHub Actions workflow runs migrations, backend tests, and dashboard checks against disposable PostgreSQL and Redis services.
+
 ```sh
 cd backend
 PYTHONPATH=. poetry run pytest tests/unit

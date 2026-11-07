@@ -1,0 +1,97 @@
+name: Continuous integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: finder
+          POSTGRES_PASSWORD: local-only
+          POSTGRES_DB: finder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finder -d finder"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES__DB_HOST: 127.0.0.1
+      POSTGRES__DB_PORT: 5432
+      POSTGRES__DB_USER: finder
+      POSTGRES__DB_PASSWORD: local-only
+      POSTGRES__DB_NAME: finder
+      REDIS__REDIS_HOST: 127.0.0.1
+      REDIS__REDIS_PORT: 6379
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USER: finder
+      DB_PASSWORD: local-only
+      DB_NAME: finder
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      NEXT_TELEMETRY_DISABLED: 1
+      FINDER_INTEGRATION: 1
+      FINDER_WEBAPP_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/webapp/package-lock.json
+      - name: Install Python dependencies
+        run: |
+          python -m pip install poetry==2.5.1
+          poetry install --no-root --no-interaction
+      - name: Prepare disposable database
+        working-directory: backend
+        run: |
+          cp ../.env.example .env.prod
+          PYTHONPATH=. poetry run alembic upgrade head
+      - name: Install and verify dashboard
+        working-directory: backend/webapp
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run build
+      - name: Start dashboard
+        working-directory: backend/webapp
+        run: |
+          npm start > /tmp/finder-webapp.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/finder-webapp.log
+          exit 1
+      - name: Run unit and integration tests
+        working-directory: backend
+        run: PYTHONPATH=. poetry run pytest -q tests

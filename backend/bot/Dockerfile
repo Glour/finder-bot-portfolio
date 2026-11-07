@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
-    POETRY_VERSION=1.4.2 \
+    POETRY_VERSION=2.5.1 \
     POETRY_HOME="/usr/local" \
     POETRY_VIRTUALENVS_CREATE=false \
     POETRY_CACHE_DIR="/var/cache/pypoetry" \
@@ -30,7 +30,7 @@ COPY ../../poetry.lock pyproject.toml $APP_PATH/
 # Development build stage
 FROM base-build AS dev-build
 
-RUN poetry install --with dev
+RUN poetry install --with dev --no-root
 
 COPY ../backend $APP_PATH
 
@@ -40,7 +40,7 @@ ENTRYPOINT [ "bash", "-c", "/app/bot/entrypoint.sh" ]
 # Production build stage
 FROM base-build AS prod-build
 
-RUN poetry install --no-dev
+RUN poetry install --only main --no-root
 
 COPY ../backend $APP_PATH
 
