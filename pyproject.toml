@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "dex-bot"
+version = "0.1.0"
+description = ""
+authors = ["alex"]
+license = "GNU v3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+aiogram = "^3.13.1"
+SQLAlchemy = "^2.0.29"
+asyncpg = "^0.29.0"
+betterlogging = "^1.0.0"
+psycopg2-binary = "^2.9.9"
+alembic = "^1.13.1"
+redis = "~4.5"
+babel = "^2.14.0"
+apscheduler = "^3.10.4"
+pydantic = "^2.9.2"
+pydantic-settings = "^2.2.1"
+httpx = {extras = ["http2"], version = "^0.28.1"}
+fastapi = "^0.115.2"
+fastapi-pagination = "^0.12.14"
+fastapi-limiter = "^0.1.6"
+fastapi-cache2 = { version = "~0.2", extras = ["redis"] }
+orjson = "^3.10.7"
+uvicorn = {extras = ["standard"], version = "^0.31.1"}
+websockets = "^15.0.1"
+protobuf = "^6.31.1"
+sortedcontainers = "^2.4.0"
+psutil = "^7.0.0"
+uvloop = "^0.21.0"
+curl-cffi = "^0.14.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

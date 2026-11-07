@@ -1,0 +1,8 @@
+# Override root .gitignore — lib/ contains source files here
+!lib/
+!lib/**
+
+node_modules/
+.next/
+out/
+.env*.local
