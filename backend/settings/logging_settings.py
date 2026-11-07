@@ -3,7 +3,7 @@ import typing as tp
 from enum import Enum
 
 import betterlogging as bl
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 log_level = logging.INFO
 bl.basic_colorized_config(level=log_level)
@@ -24,8 +24,7 @@ class LoggerLevelType(str, Enum):
 
 
 class LoggingSettings(BaseModel):
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
     fmt: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     default_handlers: list[str] = ["console"]

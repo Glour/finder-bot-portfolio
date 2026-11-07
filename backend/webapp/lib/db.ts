@@ -111,16 +111,18 @@ export async function getTokenDetail(globalTokenId: string): Promise<TokenDetail
     [globalTokenId]
   )
 
-  const gtSymbol = (
+  const globalToken = (
     await pool.query<{ symbol: string }>(
       `SELECT symbol FROM global_tokens WHERE id = $1 AND is_deleted = false`,
       [globalTokenId]
     )
-  ).rows[0]?.symbol ?? (rows.length > 0 ? rows[0].symbol : '')
+  ).rows[0]
+
+  if (!globalToken) return null
 
   return {
     global_token_id: globalTokenId,
-    symbol: gtSymbol,
+    symbol: globalToken.symbol,
     chains: rows.map((r) => ({
       chain_name: normalizeChainName(r.chain_name),
       contract_address: r.contract_address || '',

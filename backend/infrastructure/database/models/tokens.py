@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import String, Boolean, Enum, UniqueConstraint, ForeignKey, Float, Integer, Index, desc, DateTime
+from sqlalchemy import String, Boolean, Enum, UniqueConstraint, ForeignKey, Float, Integer, Index, desc, DateTime, func, text
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,7 +11,7 @@ from .base import Base, TimestampMixin, TableNameMixin, UUIDMixin, MarketType, M
 class GlobalToken(Base, TimestampMixin, UUIDMixin):
     __tablename__ = "global_tokens"
 
-    symbol: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(64))
     is_deleted: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
     token_on_chains: Mapped[list["TokenOnChain"]] = relationship("TokenOnChain", back_populates="global_token")
@@ -30,6 +30,13 @@ class GlobalToken(Base, TimestampMixin, UUIDMixin):
         secondary="global_token_sources",
         back_populates="global_tokens",
         viewonly=True
+    )
+
+    __table_args__ = (
+        Index("ix_global_tokens_is_deleted", "is_deleted"),
+        Index("ix_global_tokens_id_desc", desc("id")),
+        Index("ix_global_tokens_symbol_deleted", "symbol", postgresql_where=text("is_deleted = true")),
+        Index("uq_global_tokens_symbol_active", "symbol", unique=True, postgresql_where=text("is_deleted = false")),
     )
 
 
@@ -87,6 +94,9 @@ class TokenOnChain(Base, TimestampMixin, UUIDMixin):
     __table_args__ = (
         UniqueConstraint("token_id", "chain_id", name="uq_token_chain"),
         Index("idx_token_chains_gtid", "global_token_id"),
+        Index("ix_token_chains_global_chain", "global_token_id", "chain_id"),
+        Index("ix_token_chains_chain_global", "chain_id", "global_token_id"),
+        Index("ix_token_chains_contract_address", "contract_address"),
     )
 
 
@@ -116,6 +126,11 @@ class TokenPrice(Base, TimestampMixin, UUIDMixin):
         UniqueConstraint("global_token_id", "global_token_source_id", "market_type", name="uq_token_price"),
         Index("idx_token_prices_gtid_upd", "global_token_id", desc("updated_at")),
         Index("idx_token_prices_gtid", "global_token_id"),
+        Index("ix_token_prices_global_token_id_updated_at", "global_token_id", "updated_at"),
+        Index("ix_prices_global_token_source", "global_token_source_id"),
+        Index("ix_prices_token_id", "token_id"),
+        Index("ix_prices_market_type", "market_type"),
+        Index("ix_prices_composite", "global_token_source_id", "token_id", "market_type"),
     )
 
 
@@ -160,6 +175,11 @@ class TokenBlacklist(Base, TimestampMixin, UUIDMixin):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     global_token: Mapped["GlobalToken | None"] = relationship("GlobalToken")
+
+    __table_args__ = (
+        Index("ix_token_blacklist_chain_address", "chain_name", "contract_address"),
+        Index("ix_token_blacklist_expires_at", "expires_at"),
+    )
 
 
 class DexPair(Base, TableNameMixin, UUIDMixin, TimestampMixin):
@@ -224,15 +244,16 @@ class GlobalTokenPairBlacklist(Base, TimestampMixin, UUIDMixin):
     """
     __tablename__ = "global_token_pair_blacklist"
 
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
     global_token_a_id: Mapped[UUID] = mapped_column(
         ForeignKey("global_tokens.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        nullable=False
     )
     global_token_b_id: Mapped[UUID] = mapped_column(
         ForeignKey("global_tokens.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        nullable=False
     )
     reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -242,4 +263,6 @@ class GlobalTokenPairBlacklist(Base, TimestampMixin, UUIDMixin):
     
     __table_args__ = (
         UniqueConstraint("global_token_a_id", "global_token_b_id", name="uq_pair_blacklist"),
+        Index("ix_pair_blacklist_gt_a", "global_token_a_id"),
+        Index("ix_pair_blacklist_gt_b", "global_token_b_id"),
     )

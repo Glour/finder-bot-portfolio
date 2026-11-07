@@ -19,6 +19,7 @@ from infrastructure.services.collectors.utils.cleanup import cleanup_orderbooks
 from infrastructure.database.requests import RequestsRepo
 from infrastructure.services.collectors.structures.normalizer import normalize_signal_to_db
 from infrastructure.services.common.cache import RedisCache
+from settings import settings
 
 router = Router()
 
@@ -280,10 +281,10 @@ async def process_add(message: Message, repo: RequestsRepo, cache: RedisCache, s
             })
             added.append(f"symbol: {symbol}")
 
-            if message.from_user.id != 0:
+            if recipients := [admin_id for admin_id in settings.bot.admin_ids if admin_id != message.from_user.id]:
                 await broadcast(
                     message.bot,
-                    [0],
+                    recipients,
                     f"Админ: {message.from_user.username} | {message.from_user.id} добавил в {mute_type.value} мут:\nsymbol: {symbol}"
                 )
         elif first_part.lower() == "symbol_chain" and second_part:
@@ -322,10 +323,10 @@ async def process_add(message: Message, repo: RequestsRepo, cache: RedisCache, s
             })
             added.append(f"symbol_chain: {symbol} в {chain}")
 
-            if message.from_user.id != 0:
+            if recipients := [admin_id for admin_id in settings.bot.admin_ids if admin_id != message.from_user.id]:
                 await broadcast(
                     message.bot,
-                    [0],
+                    recipients,
                     f"Админ: {message.from_user.username} | {message.from_user.id} добавил в {mute_type.value} мут:\nsymbol_chain: {symbol} в {chain}"
                 )
         else:
@@ -366,10 +367,10 @@ async def process_add(message: Message, repo: RequestsRepo, cache: RedisCache, s
             })
             added.append(f"{chain} : {address}{symbol_hint}")
 
-            if message.from_user.id != 0:
+            if recipients := [admin_id for admin_id in settings.bot.admin_ids if admin_id != message.from_user.id]:
                 await broadcast(
                     message.bot,
-                    [0],
+                    recipients,
                     f"Админ: {message.from_user.username} | {message.from_user.id} добавил в {mute_type.value} мут:\n{chain} : {address}"
                 )
 
@@ -579,10 +580,10 @@ async def process_add_exchange(message: Message, repo: RequestsRepo, cache: Redi
         added.append(f"{source.name}{market_display}")
 
         # Broadcast notification
-        if message.from_user.id != 0:
+        if recipients := [admin_id for admin_id in settings.bot.admin_ids if admin_id != message.from_user.id]:
             await broadcast(
                 message.bot,
-                [0],
+                recipients,
                 f"Админ: {message.from_user.username} | {message.from_user.id} добавил в {mute_type.value} мут биржу:\n{source.name}{market_display}"
             )
 
@@ -830,10 +831,10 @@ async def process_add_pair(message: Message, repo: RequestsRepo, state: FSMConte
             )
 
             # Broadcast notification
-            if message.from_user.id != 0:
+            if recipients := [admin_id for admin_id in settings.bot.admin_ids if admin_id != message.from_user.id]:
                 await broadcast(
                     message.bot,
-                    [0],
+                    recipients,
                     f"Админ: {message.from_user.username} | {message.from_user.id} добавил пару в блоклист:\n"
                     f"{gt_a.symbol} ❌ {gt_b.symbol}\n"
                     f"Причина: {reason or '—'}"

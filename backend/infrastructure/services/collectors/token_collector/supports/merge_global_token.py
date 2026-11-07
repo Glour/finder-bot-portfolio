@@ -123,7 +123,7 @@ class NotificationService:
             admin_chat_ids: Admin chat IDs (from config if not provided)
         """
         if admin_chat_ids is None:
-            admin_chat_ids = DEFAULT_MERGE_CONFIG.admin_chat_ids
+            admin_chat_ids = DEFAULT_MERGE_CONFIG.admin_chat_ids or settings.bot.admin_ids
 
         links_a = self._collect_links(candidate.global_token_a, candidate.exchanges_a)
         links_b = self._collect_links(candidate.global_token_b, candidate.exchanges_b)
@@ -531,7 +531,7 @@ class MergeCandidateFinder:
             await self.notifier.notify_manual_review(
                 c,
                 candidate_hash,
-                admin_chat_ids=self.config.admin_chat_ids
+                admin_chat_ids=self.config.admin_chat_ids or settings.bot.admin_ids
             )
 
     async def split_conflicted_global_tokens(self) -> int:

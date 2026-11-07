@@ -21,8 +21,9 @@ Python 3.12, Poetry, PostgreSQL, Redis, Node.js 20.9+ (20.x) or 22+ and npm are 
 ```sh
 poetry install --no-root
 cp .env.example backend/.env.prod
-# Edit .env.prod for a disposable local environment.
+# Edit backend/.env.prod for a disposable local environment.
 cd backend
+PYTHONPATH=. poetry run alembic upgrade head
 PYTHONPATH=. poetry run uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -48,6 +49,10 @@ PYTHONPATH=. poetry run pytest tests/unit
 ```
 
 Some tests and scripts outside `tests/unit` are historical or integration-oriented and may need additional services and data. Review them before execution; migration and cleanup scripts can modify a database.
+
+The integration tests are opt-in. After migrating a disposable database and configuring both services via environment variables, run `FINDER_INTEGRATION=1 PYTHONPATH=. poetry run pytest tests/integration` from `backend/`. They check the API, its resource lifecycle, and whether the migrated schema matches the model metadata.
+
+To also exercise the dashboard, start it against an empty disposable database and Redis and set `FINDER_WEBAPP_URL` to its local URL when running the integration tests. The database test creates and removes a test token; use isolated services only.
 
 ## Limitations
 

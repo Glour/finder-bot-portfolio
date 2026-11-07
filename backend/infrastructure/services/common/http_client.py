@@ -244,6 +244,8 @@ class HTTPClientPool:
 
     def get_default_client(self) -> httpx.AsyncClient:
         """Get the default non-proxy client."""
+        if self._default_client is None or self._default_client.is_closed:
+            self._default_client = self._create_client()
         return self._default_client
 
     def get_next_proxy(self) -> Optional[str]:
@@ -274,6 +276,7 @@ class HTTPClientPool:
 
         self._clients_pool.clear()
         self._client_iterator = None
+        self._proxy_cycle = None
 
         logger.info(f"Closed {closed_count} HTTP clients")
 
@@ -313,4 +316,3 @@ async def close_clients() -> None:
 
 # Export singleton instance for modern usage
 http_client_pool = _pool
-http_client = _pool.get_default_client()

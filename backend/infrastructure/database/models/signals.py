@@ -17,6 +17,9 @@ class SignalHistory(Base):
     symbol: Mapped[str] = mapped_column(String(50), nullable=False)
     buy_from: Mapped[str] = mapped_column(String(100), nullable=False)
     sell_to: Mapped[str] = mapped_column(String(100), nullable=False)
+    buy_base_asset: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    sell_base_asset: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    telegram_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Prices & profit
     buy_price: Mapped[float] = mapped_column(Float, nullable=False)
@@ -24,7 +27,7 @@ class SignalHistory(Base):
     spread_percent: Mapped[float] = mapped_column(Float, nullable=False)
     profit: Mapped[float] = mapped_column(Float, nullable=False)
     profit_before_fee: Mapped[float] = mapped_column(Float, nullable=True)
-    applied_fee: Mapped[float] = mapped_column(Float, default=0)
+    applied_fee: Mapped[float | None] = mapped_column(Float, default=0, nullable=True)
     volume: Mapped[float] = mapped_column(Float, nullable=True)
 
     # Signal metadata
@@ -32,7 +35,7 @@ class SignalHistory(Base):
 
     # Timestamps
     analyzed_at: Mapped[int] = mapped_column(BIGINT, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now(), nullable=True)
 
     # Extra details (chains, sources, timestamps)
     details: Mapped[dict] = mapped_column(JSONB, nullable=True)

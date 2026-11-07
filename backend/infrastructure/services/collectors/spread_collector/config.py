@@ -234,8 +234,8 @@ class MergeConfig:
     # Cache timeout for merge candidates (seconds)
     candidate_cache_timeout: int = 3600 * 7  # 7 hours
 
-    # Admin notification chat IDs (should come from settings)
-    admin_chat_ids: list[int] = field(default_factory=lambda: [0, 0])
+    # An empty list uses the configured bot administrators.
+    admin_chat_ids: list[int] = field(default_factory=list)
 
     # Auto-approve thresholds
     auto_approve_price_diff_threshold: float = 3.0  # Auto-approve if diff > 3%

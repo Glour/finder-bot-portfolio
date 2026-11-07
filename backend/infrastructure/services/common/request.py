@@ -13,7 +13,7 @@ from enum import Enum
 import httpcore
 import httpx
 
-from infrastructure.services.common.http_client import get_next_client, http_client
+from infrastructure.services.common.http_client import get_next_client, http_client_pool
 from settings import logger
 
 
@@ -168,9 +168,9 @@ async def make_request(
                             logger.debug(f"{source_prefix}Using proxy client for request")
                     except Exception as e:
                         logger.warning(f"{source_prefix}Proxy client unavailable (attempt {attempt}), using default: {e}")
-                        client = http_client
+                        client = http_client_pool.get_default_client()
                 else:
-                    client = http_client
+                    client = http_client_pool.get_default_client()
 
                 if client is None:
                     logger.error("No HTTP clients available")

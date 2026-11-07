@@ -32,6 +32,7 @@ sortedcontainers = "^2.4.0"
 psutil = "^7.0.0"
 uvloop = "^0.21.0"
 curl-cffi = "^0.14.0"
+greenlet = ">=3,<4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
