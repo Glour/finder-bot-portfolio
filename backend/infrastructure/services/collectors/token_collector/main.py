@@ -3,14 +3,9 @@ import gc
 import psutil
 import os
 
-from redis import asyncio as aioredis
-
-from infrastructure.database import setup as database
-from infrastructure.database.requests import RequestsRepo
 from infrastructure.services.collectors.token_collector.manager import get_token_collector_manager
-from infrastructure.services.common.cache import RedisCache
-from infrastructure.services.common.http_client import load_proxies, init_clients, close_clients
-from settings import settings, logger
+from infrastructure.services.common.collector_resources import collector_resources
+from settings import logger
 
 
 async def memory_monitor():
@@ -47,33 +42,23 @@ async def memory_monitor():
 
 
 async def main():
-    database.redis = aioredis.from_url(settings.redis.dsn, encoding="utf-8")
-    proxies = load_proxies()
-    init_clients(proxies)
+    async with collector_resources() as (repo, redis_cache):
+        token_collector = get_token_collector_manager(repo=repo, cache=redis_cache, interval=120.0)
 
-    database.init_database(settings)
-    repo = RequestsRepo(sessionmaker=database.async_session)
-    redis_cache = RedisCache(database.redis)
+        # MEMORY FIX: Start memory monitoring in background
+        memory_task = asyncio.create_task(memory_monitor())
 
-    token_collector = get_token_collector_manager(repo=repo, cache=redis_cache, interval=120.0)
-
-    # MEMORY FIX: Start memory monitoring in background
-    memory_task = asyncio.create_task(memory_monitor())
-
-    logger.info("Token collector started")
+        logger.info("Token collector started")
     
-    try:
-        await token_collector.run()
-    finally:
-        # Cleanup background tasks
-        memory_task.cancel()
         try:
-            await memory_task
-        except asyncio.CancelledError:
-            pass
-
-        await close_clients()
-        await database.redis.close()
+            await token_collector.run()
+        finally:
+            # Cleanup background tasks
+            memory_task.cancel()
+            try:
+                await memory_task
+            except asyncio.CancelledError:
+                pass
 
 
 if __name__ == "__main__":

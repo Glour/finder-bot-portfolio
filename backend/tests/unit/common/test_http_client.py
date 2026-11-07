@@ -2,6 +2,7 @@
 
 import asyncio
 
+import httpx
 import pytest
 
 from infrastructure.services.common.http_client import (
@@ -36,5 +37,22 @@ def test_default_client_is_recreated_after_shutdown():
         assert second is not first
         assert not second.is_closed
         await pool.close_all()
+
+    asyncio.run(exercise_pool())
+
+
+def test_reinitialization_cannot_discard_open_proxy_clients():
+    async def exercise_pool():
+        pool = object.__new__(HTTPClientPool)
+        client = httpx.AsyncClient()
+        pool._clients_pool = [client]
+        pool._default_client = None
+        pool._client_iterator = None
+        pool._proxy_cycle = None
+        with pytest.raises(RuntimeError, match="Close existing proxy clients"):
+            pool.init_proxy_clients([])
+        assert pool._clients_pool == [client]
+        await pool.close_all()
+        assert client.is_closed
 
     asyncio.run(exercise_pool())

@@ -1,8 +1,5 @@
 """
-HTTP Client Pool Management with proper lifecycle and resource management.
-
-This module provides a thread-safe HTTP client pool with proxy support,
-eliminating global state and implementing proper singleton pattern.
+HTTP client pool with proxy rotation and explicit lifecycle management.
 """
 import itertools
 import logging
@@ -118,8 +115,7 @@ class HTTPClientPool:
     """
     Singleton HTTP client pool with proxy rotation support.
 
-    This class manages a pool of HTTP clients with proper lifecycle management,
-    eliminating global state and providing thread-safe operations.
+    The pool is shared by services running in the same process.
     """
 
     _instance: Optional['HTTPClientPool'] = None
@@ -178,11 +174,8 @@ class HTTPClientPool:
             proxies_list: List of proxy URLs. If None, loads from default location
             clients_count: Maximum number of clients to create
         """
-        # Clean up existing clients
         if self._clients_pool:
-            logger.warning("Reinitializing client pool - old clients will be closed")
-
-        self._clients_pool.clear()
+            raise RuntimeError("Close existing proxy clients before reinitializing the pool")
 
         # Load proxies if not provided
         if proxies_list is None:
