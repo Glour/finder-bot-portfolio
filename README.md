@@ -52,7 +52,7 @@ The dashboard reads database connection settings from `DB_HOST`, `DB_PORT`, `DB_
 
 ## Tests
 
-The GitHub Actions workflow runs migrations, backend tests, and dashboard checks against disposable PostgreSQL and Redis services.
+The GitHub Actions workflow runs migrations, backend tests, and dashboard checks against disposable PostgreSQL and Redis services. It also builds the API and bot production images.
 
 ```sh
 cd backend

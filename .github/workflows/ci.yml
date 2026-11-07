@@ -95,3 +95,20 @@ jobs:
       - name: Run unit and integration tests
         working-directory: backend
         run: PYTHONPATH=. poetry run pytest -q tests
+
+  containers:
+    name: Container (${{ matrix.component }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [api, bot]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build production image
+        run: docker build --target prod-build -f "backend/${{ matrix.component }}/Dockerfile" -t finder-ci .
+      - name: Verify runtime dependencies
+        run: >-
+          docker run --rm --network none --env-file .env.example --entrypoint python finder-ci
+          -c "import aiogram, asyncpg, greenlet, fastapi; from settings.app_settings import AppSettings; AppSettings()"
