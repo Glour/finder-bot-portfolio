@@ -5,6 +5,7 @@ This module provides a robust HTTP client wrapper with automatic retries,
 proper timeout handling, and structured error reporting.
 """
 import asyncio
+import logging
 from dataclasses import dataclass
 from json import loads, JSONDecodeError
 from typing import Any, Optional
@@ -13,8 +14,12 @@ from enum import Enum
 import httpcore
 import httpx
 
-from infrastructure.services.common.http_client import get_next_client, http_client_pool
-from settings import logger
+from infrastructure.services.common.http_client import (
+    ClientPoolNotInitializedError,
+    get_next_client,
+    http_client_pool,
+)
+logger = logging.getLogger("settings")
 
 
 class HTTPMethod(str, Enum):
@@ -40,8 +45,8 @@ class RequestConfig:
     )
 
 
-# Global semaphore for request rate limiting
-_semaphore: Optional[asyncio.Semaphore] = None
+# Semaphores belong to their event loop and concurrency limit.
+_semaphores: dict[tuple[asyncio.AbstractEventLoop, int], asyncio.Semaphore] = {}
 
 
 def get_semaphore(max_concurrent: int = 1000) -> asyncio.Semaphore:
@@ -54,10 +59,15 @@ def get_semaphore(max_concurrent: int = 1000) -> asyncio.Semaphore:
     Returns:
         Asyncio semaphore
     """
-    global _semaphore
-    if _semaphore is None:
-        _semaphore = asyncio.Semaphore(max_concurrent)
-    return _semaphore
+    if max_concurrent < 1:
+        raise ValueError("max_concurrent must be positive")
+    for key in tuple(_semaphores):
+        if key[0].is_closed():
+            del _semaphores[key]
+    key = (asyncio.get_running_loop(), max_concurrent)
+    if key not in _semaphores:
+        _semaphores[key] = asyncio.Semaphore(max_concurrent)
+    return _semaphores[key]
 
 
 def build_url(
@@ -138,7 +148,7 @@ async def make_request(
     url = build_url(host, route, port, use_https)
 
     # Prepare headers
-    headers = headers or {}
+    headers = dict(headers) if headers else {}
     headers.setdefault("User-Agent", config.user_agent)
 
     # Validate method
@@ -158,16 +168,16 @@ async def make_request(
 
     # Retry loop
     for attempt in range(1, config.max_retries + 1):
-        async with semaphore:
-            try:
+        try:
+            async with semaphore:
                 # Select client (proxy or default)
                 if use_proxy:
                     try:
                         client = get_next_client()
                         if attempt == 1:  # Log only on first attempt to avoid spam
                             logger.debug(f"{source_prefix}Using proxy client for request")
-                    except Exception as e:
-                        logger.warning(f"{source_prefix}Proxy client unavailable (attempt {attempt}), using default: {e}")
+                    except ClientPoolNotInitializedError:
+                        logger.warning(f"{source_prefix}Proxy client unavailable (attempt {attempt}), using default")
                         client = http_client_pool.get_default_client()
                 else:
                     client = http_client_pool.get_default_client()
@@ -178,14 +188,15 @@ async def make_request(
 
                 # Execute request based on method
                 if http_method == HTTPMethod.GET:
-                    response = await client.get(url, params=params, headers=headers)
+                    response = await client.get(url, params=params, headers=headers, timeout=config.timeout_seconds)
                 elif http_method == HTTPMethod.POST:
                     response = await client.post(
                         url,
                         params=params,
                         data=data,
                         json=json,
-                        headers=headers
+                        headers=headers,
+                        timeout=config.timeout_seconds,
                     )
                 elif http_method == HTTPMethod.PUT:
                     response = await client.put(
@@ -193,17 +204,19 @@ async def make_request(
                         params=params,
                         data=data,
                         json=json,
-                        headers=headers
+                        headers=headers,
+                        timeout=config.timeout_seconds,
                     )
                 elif http_method == HTTPMethod.DELETE:
-                    response = await client.delete(url, params=params, headers=headers)
+                    response = await client.delete(url, params=params, headers=headers, timeout=config.timeout_seconds)
                 elif http_method == HTTPMethod.PATCH:
                     response = await client.patch(
                         url,
                         params=params,
                         data=data,
                         json=json,
-                        headers=headers
+                        headers=headers,
+                        timeout=config.timeout_seconds,
                     )
 
                 # Check status
@@ -213,113 +226,113 @@ async def make_request(
                 raw_content = await response.aread()
                 return loads(raw_content)
 
-            except JSONDecodeError as e:
-                last_error = e
-                logger.error(
-                    f"{source_prefix}JSON decode error on attempt {attempt}/{config.max_retries}: {str(e)}",
-                    extra={
-                        "url": url,
-                        "source": source_name or host,
-                        "content_preview": raw_content[:200].decode('utf-8', errors='ignore')
-                    }
-                )
-                return None
+        except JSONDecodeError as e:
+            last_error = e
+            logger.error(
+                f"{source_prefix}JSON decode error on attempt {attempt}/{config.max_retries}: {str(e)}",
+                extra={
+                    "url": url,
+                    "source": source_name or host,
+                    "content_preview": raw_content[:200].decode('utf-8', errors='ignore')
+                }
+            )
+            return None
 
-            except httpx.PoolTimeout as e:
-                last_error = e
+        except httpx.PoolTimeout as e:
+            last_error = e
+            logger.warning(
+                f"{source_prefix}Pool timeout on attempt {attempt}/{config.max_retries} - connection pool exhausted",
+                extra={"url": url, "source": source_name or host, "use_proxy": use_proxy}
+            )
+
+            # Retry with longer delay for pool timeout (2-10 seconds)
+            if attempt < config.max_retries:
+                pool_retry_delay = 2.0 * (2 ** (attempt - 1))  # 2s, 4s, 8s
+                await asyncio.sleep(pool_retry_delay)
+                continue
+
+        except (
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+            httpx.WriteTimeout,
+            httpx.ReadError,
+            httpx.ProxyError,
+            httpx.RemoteProtocolError,
+            httpx.ConnectError,
+            httpcore.WriteTimeout,
+            httpcore.LocalProtocolError,
+        ) as e:
+            last_error = e
+            logger.debug(
+                f"{source_prefix}Network error on attempt {attempt}/{config.max_retries}: {e.__class__.__name__} - {str(e)}",
+                extra={"url": url, "source": source_name or host, "use_proxy": use_proxy}
+            )
+
+            # Retry with delay
+            if attempt < config.max_retries:
+                await asyncio.sleep(config.retry_delay * attempt)
+                continue
+
+        except httpx.HTTPStatusError as e:
+            last_error = e
+            status_code = e.response.status_code
+
+            # Don't retry client errors (400-499)
+            if 400 <= status_code < 500:
+                if status_code == 400:
+                    logger.error(
+                        f"{source_prefix}Bad request (400) - {url}",
+                        extra={"url": url, "source": source_name or host, "method": method}
+                    )
+                    return "invalid_symbol"  # Legacy behavior
+                elif status_code == 404:
+                    logger.warning(f"{source_prefix}Resource not found (404) - {url}")
+                    return None
+                elif status_code in {403, 429}:
+                    logger.warning(
+                        f"{source_prefix}Rate limited or forbidden ({status_code}) on attempt {attempt}/{config.max_retries} - {url}",
+                        extra={"url": url, "source": source_name or host, "attempt": attempt}
+                    )
+                    # Retry with longer exponential backoff for rate limits
+                    if attempt < config.max_retries:
+                        # 5s, 10s, 20s instead of 0.5s, 1s, 2s
+                        delay = 5.0 * (2 ** (attempt - 1))
+                        await asyncio.sleep(delay)
+                        continue
+                else:
+                    response_preview = e.response.text[:200] if hasattr(e.response, 'text') else ""
+                    logger.error(
+                        f"{source_prefix}Client error ({status_code}) - {url}",
+                        extra={"url": url, "source": source_name or host, "response": response_preview}
+                    )
+                    return None
+
+            # Retry server errors (500-599)
+            elif 500 <= status_code < 600:
                 logger.warning(
-                    f"{source_prefix}Pool timeout on attempt {attempt}/{config.max_retries} - connection pool exhausted",
-                    extra={"url": url, "source": source_name or host, "use_proxy": use_proxy}
+                    f"{source_prefix}Server error ({status_code}) on attempt {attempt}/{config.max_retries} - {url}",
+                    extra={"url": url, "source": source_name or host}
                 )
-
-                # Retry with longer delay for pool timeout (2-10 seconds)
-                if attempt < config.max_retries:
-                    pool_retry_delay = 2.0 * (2 ** (attempt - 1))  # 2s, 4s, 8s
-                    await asyncio.sleep(pool_retry_delay)
-                    continue
-
-            except (
-                httpx.ConnectTimeout,
-                httpx.ReadTimeout,
-                httpx.WriteTimeout,
-                httpx.ReadError,
-                httpx.ProxyError,
-                httpx.RemoteProtocolError,
-                httpx.ConnectError,
-                httpcore.WriteTimeout,
-                httpcore.LocalProtocolError,
-            ) as e:
-                last_error = e
-                logger.debug(
-                    f"{source_prefix}Network error on attempt {attempt}/{config.max_retries}: {e.__class__.__name__} - {str(e)}",
-                    extra={"url": url, "source": source_name or host, "use_proxy": use_proxy}
-                )
-
-                # Retry with delay
                 if attempt < config.max_retries:
                     await asyncio.sleep(config.retry_delay * attempt)
                     continue
 
-            except httpx.HTTPStatusError as e:
-                last_error = e
-                status_code = e.response.status_code
+            return None
 
-                # Don't retry client errors (400-499)
-                if 400 <= status_code < 500:
-                    if status_code == 400:
-                        logger.error(
-                            f"{source_prefix}Bad request (400) - {url}",
-                            extra={"url": url, "source": source_name or host, "method": method}
-                        )
-                        return "invalid_symbol"  # Legacy behavior
-                    elif status_code == 404:
-                        logger.warning(f"{source_prefix}Resource not found (404) - {url}")
-                        return None
-                    elif status_code in {403, 429}:
-                        logger.warning(
-                            f"{source_prefix}Rate limited or forbidden ({status_code}) on attempt {attempt}/{config.max_retries} - {url}",
-                            extra={"url": url, "source": source_name or host, "attempt": attempt}
-                        )
-                        # Retry with longer exponential backoff for rate limits
-                        if attempt < config.max_retries:
-                            # 5s, 10s, 20s instead of 0.5s, 1s, 2s
-                            delay = 5.0 * (2 ** (attempt - 1))
-                            await asyncio.sleep(delay)
-                            continue
-                    else:
-                        response_preview = e.response.text[:200] if hasattr(e.response, 'text') else ""
-                        logger.error(
-                            f"{source_prefix}Client error ({status_code}) - {url}",
-                            extra={"url": url, "source": source_name or host, "response": response_preview}
-                        )
-                        return None
+        except Exception as e:
+            last_error = e
+            logger.exception(
+                f"{source_prefix}Unexpected error on attempt {attempt}/{config.max_retries}: {type(e).__name__} - {str(e)}",
+                extra={
+                    "url": url[:100],
+                    "source": source_name or host,
+                    "error_type": type(e).__name__,
+                    "method": method
+                }
+            )
 
-                # Retry server errors (500-599)
-                elif 500 <= status_code < 600:
-                    logger.warning(
-                        f"{source_prefix}Server error ({status_code}) on attempt {attempt}/{config.max_retries} - {url}",
-                        extra={"url": url, "source": source_name or host}
-                    )
-                    if attempt < config.max_retries:
-                        await asyncio.sleep(config.retry_delay * attempt)
-                        continue
-
-                return None
-
-            except Exception as e:
-                last_error = e
-                logger.exception(
-                    f"{source_prefix}Unexpected error on attempt {attempt}/{config.max_retries}: {type(e).__name__} - {str(e)}",
-                    extra={
-                        "url": url[:100],
-                        "source": source_name or host,
-                        "error_type": type(e).__name__,
-                        "method": method
-                    }
-                )
-
-                # Don't retry on unexpected errors
-                return None
+            # Don't retry on unexpected errors
+            return None
 
     # Max retries reached - log with last error details
     error_detail = f": {type(last_error).__name__} - {str(last_error)}" if last_error else ""
