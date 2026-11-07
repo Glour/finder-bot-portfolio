@@ -27,7 +27,7 @@ PYTHONPATH=. poetry run alembic upgrade head
 PYTHONPATH=. poetry run uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Settings are loaded from `.env.prod` in the current working directory or from environment variables; for the command above, place the edited file in `backend/.env.prod`, or export the settings in your shell. The API needs reachable PostgreSQL and Redis services at startup. Telegram bot tokens and topic IDs are necessary for bot and notification functionality. Never use real credentials in a public repository. Proxy configuration is optional and is loaded separately if present.
+Settings are loaded from `.env.prod` in the current working directory or from environment variables; for the command above, place the edited file in `backend/.env.prod`, or export the settings in your shell. The API needs reachable PostgreSQL and Redis services at startup. Telegram bot tokens and topic IDs are necessary for bot and notification functionality. Never use real credentials in a public repository. Proxy configuration is optional and is loaded separately if present. The LBank contract-address lookup accepts its optional `LBANK_EX_TOKEN` from the environment; its live behaviour is unverified.
 
 The Python images use the repository root as their build context:
 

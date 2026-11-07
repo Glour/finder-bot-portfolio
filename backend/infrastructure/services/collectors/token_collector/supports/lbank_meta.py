@@ -2,6 +2,7 @@ import asyncio
 import itertools
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -109,7 +110,7 @@ async def fetch_contract_address(asset: str, chain: str) -> dict[str, Any]:
         "ex-os-name": "Mac OS",
         "ex-os-version": "10.15.7",
         "ex-timestamp": str(int(time.time() * 1000)),
-        "ex-token": "REDACTED",
+        "ex-token": os.getenv("LBANK_EX_TOKEN", ""),
         "origin": "https://www.lbank.com",
         "pragma": "no-cache",
         "priority": "u=1, i",
