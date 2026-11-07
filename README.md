@@ -29,6 +29,15 @@ PYTHONPATH=. poetry run uvicorn api.main:app --host 127.0.0.1 --port 8000
 
 Settings are loaded from `.env.prod` in the current working directory or from environment variables; for the command above, place the edited file in `backend/.env.prod`, or export the settings in your shell. The API needs reachable PostgreSQL and Redis services at startup. Telegram bot tokens and topic IDs are necessary for bot and notification functionality. Never use real credentials in a public repository. Proxy configuration is optional and is loaded separately if present.
 
+The Python images use the repository root as their build context:
+
+```sh
+docker build -f backend/api/Dockerfile --target prod-build -t finder-api .
+docker build -f backend/bot/Dockerfile --target prod-build -t finder-bot .
+```
+
+The bot image runs migrations at startup; provide an isolated database and bot configuration before running it.
+
 To work on the dashboard:
 
 ```sh

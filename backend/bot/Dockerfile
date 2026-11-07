@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 
 WORKDIR $APP_PATH
-COPY ../../poetry.lock pyproject.toml $APP_PATH/
+COPY poetry.lock pyproject.toml $APP_PATH/
 
 
 # Development build stage
@@ -32,7 +32,7 @@ FROM base-build AS dev-build
 
 RUN poetry install --with dev --no-root
 
-COPY ../backend $APP_PATH
+COPY backend $APP_PATH
 
 RUN chmod +x /app/bot/entrypoint.sh
 ENTRYPOINT [ "bash", "-c", "/app/bot/entrypoint.sh" ]
@@ -42,7 +42,7 @@ FROM base-build AS prod-build
 
 RUN poetry install --only main --no-root
 
-COPY ../backend $APP_PATH
+COPY backend $APP_PATH
 
 RUN chmod +x /app/bot/entrypoint.sh
 ENTRYPOINT [ "bash", "-c", "/app/bot/entrypoint.sh" ]

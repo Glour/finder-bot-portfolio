@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 
 wait_for_service() {
 host="$1"
