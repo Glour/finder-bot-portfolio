@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
@@ -17,17 +17,22 @@ from settings import settings, logger
 
 
 @asynccontextmanager
-async def lifespan(App: FastAPI):  # noqa
-    database.redis = aioredis.from_url(settings.redis.dsn, encoding="utf-8")
-    await initialize_cache_and_limiter()
-    await initialize_database()
-    proxies = load_proxies()
-    init_clients(proxies)
-    logger.info("Application initialized")
-    yield
-    await database.redis.close()
-    await FastAPILimiter.close()
-    await close_clients()
+async def lifespan(app: FastAPI):
+    async with AsyncExitStack() as stack:
+        redis = aioredis.from_url(settings.redis.dsn, encoding="utf-8")
+        database.redis = redis
+        stack.push_async_callback(redis.close)
+        stack.callback(FastAPICache.reset)
+        stack.callback(setattr, database, "redis", None)
+        await initialize_cache_and_limiter(redis)
+
+        stack.push_async_callback(close_database)
+        database.init_database(settings)
+
+        stack.push_async_callback(close_clients)
+        init_clients(load_proxies())
+        logger.info("Application initialized")
+        yield
 
 
 app = FastAPI(
@@ -58,16 +63,11 @@ setup_cors(app, settings)
 add_pagination(app)
 
 
-async def initialize_cache_and_limiter():
-    database.redis = aioredis.from_url(settings.redis.dsn, encoding="utf-8")
-    FastAPICache.init(RedisBackend(database.redis), prefix="fastapi-cache")
-    await FastAPILimiter.init(database.redis)
+async def initialize_cache_and_limiter(redis):
+    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+    await FastAPILimiter.init(redis)
 
 
-async def initialize_database():
-    database.init_database(settings)
-    await startup()
-
-
-async def startup() -> None:
-    pass
+async def close_database() -> None:
+    await database.db_manager.close_database()
+    database.async_session = None

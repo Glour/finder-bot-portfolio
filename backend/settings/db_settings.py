@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from pydantic import Field, RedisDsn
 from pydantic_settings import BaseSettings
 
@@ -37,4 +39,10 @@ class RedisSettings(BaseSettings):
 
     @property
     def dsn(self) -> str:
-        return str(RedisDsn.build(scheme="redis", host=self.redis_host, port=self.redis_port))
+        return str(RedisDsn.build(
+            scheme="redis",
+            host=self.redis_host,
+            port=self.redis_port,
+            password=quote(self.redis_password, safe="") if self.redis_password else None,
+            path=str(self.redis_db),
+        ))

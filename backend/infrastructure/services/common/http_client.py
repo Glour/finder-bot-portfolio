@@ -5,13 +5,14 @@ This module provides a thread-safe HTTP client pool with proxy support,
 eliminating global state and implementing proper singleton pattern.
 """
 import itertools
+import logging
 from pathlib import Path
 from typing import Optional, Iterator
 from contextlib import asynccontextmanager
 
 import httpx
 
-from settings import logger
+logger = logging.getLogger("settings")
 
 
 class ProxyError(Exception):
@@ -43,9 +44,7 @@ def format_proxy_url(proxy_str: str) -> str:
     if "@" in proxy_str:
         parts = proxy_str.split("@")
         if len(parts) != 2:
-            raise ValueError(
-                f"Invalid proxy format: '{proxy_str}'. Expected format: username:password@host:port"
-            )
+            raise ValueError("Invalid proxy format; expected username:password@host:port")
 
         auth_part = parts[0]  # username:password
         server_part = parts[1]  # host:port
@@ -53,25 +52,19 @@ def format_proxy_url(proxy_str: str) -> str:
         # Validate auth part
         auth_parts = auth_part.split(":")
         if len(auth_parts) != 2:
-            raise ValueError(
-                f"Invalid proxy auth format: '{auth_part}'. Expected format: username:password"
-            )
+            raise ValueError("Invalid proxy authentication; expected username:password")
 
         # Validate server part
         server_parts = server_part.split(":")
         if len(server_parts) != 2:
-            raise ValueError(
-                f"Invalid proxy server format: '{server_part}'. Expected format: host:port"
-            )
+            raise ValueError("Invalid proxy server; expected host:port")
 
         return f"http://{proxy_str}"
 
     # Fallback to old format: host:port:username:password
     parts = proxy_str.split(":")
     if len(parts) != 4:
-        raise ValueError(
-            f"Invalid proxy format: '{proxy_str}'. Expected format: username:password@host:port"
-        )
+        raise ValueError("Invalid proxy format; expected username:password@host:port")
     host, port, username, password = parts
     return f"http://{username}:{password}@{host}:{port}"
 
@@ -221,8 +214,8 @@ class HTTPClientPool:
                         limits=limits
                     )
                     self._clients_pool.append(client)
-                except Exception as e:
-                    logger.error(f"Failed to create client with proxy {proxy_url}: {e}")
+                except Exception:
+                    logger.error("Failed to create a proxy client; check proxy configuration")
 
         if self._clients_pool:
             self._client_iterator = itertools.cycle(self._clients_pool)

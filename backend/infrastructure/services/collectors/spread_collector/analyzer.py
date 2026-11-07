@@ -1,7 +1,4 @@
 class ArbitrageAnalyzer:
-    def __init__(self):
-        pass
-
     def analyze_pair(
             self,
             ob1: dict, name1: str, contract1: float,
@@ -26,13 +23,12 @@ class ArbitrageAnalyzer:
     ):
         best_bid = self._get_best_bid(buyer_ob.get("bids", []))
         best_ask = self._get_best_ask(seller_ob.get("asks", []))
-        # logger.error(f"best bid: {best_bid}, best ask: {best_ask}")
         if not best_bid or not best_ask:
             return None
 
         bid_price, bid_volume = best_bid
         ask_price, ask_volume = best_ask
-        if bid_price is None or ask_price is None:
+        if bid_price is None or ask_price is None or bid_price <= 0 or ask_price <= 0:
             return None
 
         buyer_multiplier = buyer_contract if "futures" in buyer_name.lower() else 1.0
@@ -69,8 +65,16 @@ class ArbitrageAnalyzer:
             buyer_ob: dict, buyer_name: str, buyer_contract: float,
             seller_ob: dict, seller_name: str, seller_contract: float
     ):
-        bids = sorted(buyer_ob.get("bids", []), key=lambda x: -x[0])
-        asks = sorted(seller_ob.get("asks", []), key=lambda x: x[0])
+        bids = sorted(
+            ((level[0], level[1]) for level in buyer_ob.get("bids", [])
+             if len(level) >= 2 and level[0] > 0 and level[1] > 0),
+            key=lambda level: -level[0],
+        )
+        asks = sorted(
+            ((level[0], level[1]) for level in seller_ob.get("asks", [])
+             if len(level) >= 2 and level[0] > 0 and level[1] > 0),
+            key=lambda level: level[0],
+        )
 
         if not bids or not asks:
             return None
