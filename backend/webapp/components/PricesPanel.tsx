@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { X, Clock, AlertTriangle, CheckCircle2, ArrowRight, ExternalLink, Copy, Check } from 'lucide-react'
+import { X, AlertTriangle, CheckCircle2, ArrowRight, ExternalLink, Copy, Check } from 'lucide-react'
 import type { SpreadRow } from '@/lib/types'
 import type { ExchangePrice } from '@/lib/prices'
 import {

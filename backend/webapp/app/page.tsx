@@ -24,8 +24,6 @@ import {
   formatVolume,
   formatAge,
   isStale,
-  getExchangeColors,
-  getLevelStyle,
   getLevelLabel,
   getExchangeName,
 } from '@/lib/utils'
@@ -101,8 +99,6 @@ export default function Dashboard() {
     es.onerror = () => {
       setConnected(false)
       setError('Connection lost — reconnecting…')
-      es.close()
-      setTimeout(connect, 3000)
     }
   }, [])
 
@@ -386,10 +382,6 @@ export default function Dashboard() {
                 {sortedRows.map((row, idx) => {
                   const s = row.signal
                   const isSelected = selected?.key === row.key
-                  const ageMs = s.analyzed_at ? Date.now() - s.analyzed_at : Infinity
-                  const stale = isStale(s.analyzed_at, 120_000)
-                  const levelStyle = getLevelStyle(s.level)
-
                   return (
                     <tr
                       key={row.key}

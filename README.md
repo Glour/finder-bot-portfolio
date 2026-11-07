@@ -16,7 +16,7 @@ The data path is broadly: exchange collectors → Redis and PostgreSQL → sprea
 
 ## Local setup
 
-Python 3.12, Poetry, PostgreSQL, Redis, Node.js and npm are required for the respective components. Start with isolated, disposable services and your own credentials. Production deployment files, proxy lists, and environment files from the original installation are intentionally excluded.
+Python 3.12, Poetry, PostgreSQL, Redis, Node.js 20.9+ (20.x) or 22+ and npm are required for the respective components. Start with isolated, disposable services and your own credentials. Production deployment files, proxy lists, and environment files from the original installation are intentionally excluded.
 
 ```sh
 poetry install --no-root
@@ -33,6 +33,8 @@ To work on the dashboard:
 ```sh
 cd backend/webapp
 npm ci
+npm run lint
+npm run typecheck
 npm run dev
 ```
 

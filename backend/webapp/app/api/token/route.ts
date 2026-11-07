@@ -13,6 +13,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: detail, ts: Date.now() })
   } catch (error) {
     console.error('[TokenDetail] error:', error)
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to load token details' }, { status: 500 })
   }
 }

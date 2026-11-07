@@ -24,7 +24,8 @@ export async function GET() {
         const rows = await getStreamPriceSnapshot()
         send({ type: 'prices', data: rows, ts: Date.now() })
       } catch (err) {
-        send({ type: 'error', message: String(err) })
+        console.error('[price stream]', err)
+        send({ type: 'error', message: 'Failed to load prices' })
       }
 
       const timer = setInterval(async () => {
@@ -33,7 +34,8 @@ export async function GET() {
           const rows = await getStreamPriceSnapshot()
           send({ type: 'prices', data: rows, ts: Date.now() })
         } catch (err) {
-          send({ type: 'error', message: String(err) })
+          console.error('[price stream]', err)
+          send({ type: 'error', message: 'Failed to load prices' })
         }
       }, INTERVAL_MS)
 

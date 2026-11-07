@@ -4,9 +4,7 @@ import type { SpreadRow } from './types'
 import type { TokenPriceRow } from './prices'
 
 declare global {
-  // eslint-disable-next-line no-var
   var _redis: Redis | undefined
-  // eslint-disable-next-line no-var
   var _redisBuf: Redis | undefined
 }
 
@@ -23,14 +21,12 @@ function createRedis(): Redis {
 }
 
 function createRedisBuf(): Redis {
-  // @ts-ignore – returnBuffers is valid at constructor level
   const client = new Redis({
     host: process.env.REDIS_HOST || 'redis',
     port: parseInt(process.env.REDIS_PORT || '6379'),
     maxRetriesPerRequest: 3,
     connectTimeout: 5000,
     lazyConnect: false,
-    returnBuffers: true,
   })
   client.on('error', (err) => console.error('[RedisBuf] error:', err.message))
   return client
@@ -356,7 +352,12 @@ export async function getStreamPriceSnapshot(): Promise<TokenPriceRow[]> {
 
   // Ensure map is initialized (shared promise — only one init in flight)
   if (!global._priceMapReady) {
-    if (!global._priceMapInitializing) global._priceMapInitializing = initPriceMap()
+    if (!global._priceMapInitializing) {
+      global._priceMapInitializing = initPriceMap().catch((error) => {
+        global._priceMapInitializing = undefined
+        throw error
+      })
+    }
     await global._priceMapInitializing
   }
 

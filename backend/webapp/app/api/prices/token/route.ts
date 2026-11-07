@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const row = rows.find((r) => r.global_token_id === id) ?? null
     return NextResponse.json({ data: row, ts: Date.now() })
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    console.error('[price token API]', error)
+    return NextResponse.json({ error: 'Failed to load token prices' }, { status: 500 })
   }
 }

@@ -25,7 +25,8 @@ export async function GET() {
         const spreads = await getAllSpreads()
         send({ type: 'spreads', data: spreads, count: spreads.length, ts: Date.now() })
       } catch (err) {
-        send({ type: 'error', message: String(err) })
+        console.error('[spread stream]', err)
+        send({ type: 'error', message: 'Failed to load spreads' })
       }
 
       // Poll on interval
@@ -38,7 +39,8 @@ export async function GET() {
           const spreads = await getAllSpreads()
           send({ type: 'spreads', data: spreads, count: spreads.length, ts: Date.now() })
         } catch (err) {
-          send({ type: 'error', message: String(err) })
+          console.error('[spread stream]', err)
+          send({ type: 'error', message: 'Failed to load spreads' })
         }
       }, INTERVAL_MS)
 

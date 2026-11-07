@@ -9,6 +9,7 @@ export async function GET() {
     const rows = await getStreamPriceSnapshot()
     return NextResponse.json({ data: rows, ts: Date.now() })
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    console.error('[prices API]', error)
+    return NextResponse.json({ error: 'Failed to load prices' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, WifiOff, Search, X, Copy, ExternalLink } from 'lucide-react'
 import type { TokenPriceRow, ExchangePrice } from '@/lib/prices'
-import { formatPrice, formatAge, isStale, getExchangeColors } from '@/lib/utils'
+import { formatPrice, formatAge, getExchangeColors } from '@/lib/utils'
 
 // ── Token Detail Panel ────────────────────────────────────────────────────────
 
@@ -155,13 +155,17 @@ function TokenDetailPanel({
   const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    setDetail(null)
-    fetch(`/api/token?id=${encodeURIComponent(tokenId)}`)
-      .then((r) => r.json())
+    const controller = new AbortController()
+    fetch(`/api/token?id=${encodeURIComponent(tokenId)}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load token details')
+        return r.json()
+      })
       .then((j) => { setDetail(j.data); setLoading(false) })
-      .catch((e) => { setError(String(e)); setLoading(false) })
+      .catch((e) => {
+        if (!controller.signal.aborted) { setError(String(e)); setLoading(false) }
+      })
+    return () => controller.abort()
   }, [tokenId])
 
   const handleCopy = (text: string) => {
@@ -406,29 +410,31 @@ export default function PricesTable() {
   const [now, setNow] = useState(() => Date.now())
   const [filterExchanges, setFilterExchanges] = useState<Set<string>>(new Set())
   const [selectedToken, setSelectedToken] = useState<{ id: string; symbol: string } | null>(null)
-  const [contractMatchIds, setContractMatchIds] = useState<Set<string> | null>(null)
-  const [contractSearching, setContractSearching] = useState(false)
+  const [contractResult, setContractResult] = useState<{ query: string; ids: Set<string> } | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
   // Detect contract-like search: starts with 0x or is 30+ hex chars
   const isContractSearch = /^(0x)?[0-9a-fA-F]{20,}$/.test(search.replace(/\s/g, ''))
+  const contractMatchIds = contractResult?.query === search ? contractResult.ids : null
+  const contractSearching = isContractSearch && contractMatchIds === null
 
   useEffect(() => {
-    if (!isContractSearch || search.length < 8) {
-      setContractMatchIds(null)
-      return
-    }
-    setContractSearching(true)
+    if (!isContractSearch || search.length < 8) return
+    const controller = new AbortController()
     const t = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(search.trim())}`)
-        .then((r) => r.json())
-        .then((d) => {
-          setContractMatchIds(new Set(d.ids || []))
-          setContractSearching(false)
+      fetch(`/api/search?q=${encodeURIComponent(search.trim())}`, { signal: controller.signal })
+        .then((r) => {
+          if (!r.ok) throw new Error('Search failed')
+          return r.json()
         })
-        .catch(() => { setContractMatchIds(new Set()); setContractSearching(false) })
+        .then((d) => {
+          setContractResult({ query: search, ids: new Set(d.ids || []) })
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setContractResult({ query: search, ids: new Set() })
+        })
     }, 300)
-    return () => clearTimeout(t)
+    return () => { clearTimeout(t); controller.abort() }
   }, [search, isContractSearch])
 
   const toggleFilterExchange = (key: string) => {
@@ -462,8 +468,6 @@ export default function PricesTable() {
     }
     es.onerror = () => {
       setConnected(false)
-      es.close()
-      setTimeout(connect, 3000)
     }
   }, [])
 
